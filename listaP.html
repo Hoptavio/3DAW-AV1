@@ -5,12 +5,13 @@
         <title>Opções de Listagem</title>
     </head>
     <body>
-        <header>
-           <nav>
+         <header>
+            <nav>
                 <a href="Usuario.php">Incluir usuario</a> |
                 <a href="incluir.php">Incluir pergunta multipla escolha</a> |
-                 <a href="incluirD.php">Incluir pergunta discursiva</a> |
-                <a href="alterar.php">Alterar pergunta</a> |
+                <a href="incluirD.php">Incluir pergunta discursiva</a> |
+                <a href="alterar.php">Alterar pergunta multipla escolha</a> |
+                <a href="alterarD.php">Alterar pergunta discursiva</a> |
                 <a href="excluir.php">Excluir pergunta</a> |
                 <a href="listaP.html">Listar pergunta</a>
             </nav>
@@ -20,13 +21,23 @@
         <h1>Escolha uma opção de listagem</h1>
 
         <form action="listaP.php" method="GET">
-            <button type="submit" name="opcao" value="todas">Listar todas as perguntas</button>
+            <button type="submit" name="opcao" value="todas">Listar todas as perguntas multipla escolha</button>
         </form>
         <br>
         <form action="listaP.php" method="GET">
             <label for="numero">Numero da pergunta:</label>
             <input type="text" name="numero">
-            <button type="submit" name="opcao" value="uma">Listar uma pergunta</button>
+            <button type="submit" name="opcao" value="uma">Listar uma pergunta multipla escolha</button>
+        </form>
+        <br>
+        <form action="listaPD.php" method="GET">
+            <button type="submit" name="opcao" value="todas">Listar todas as perguntas discursivas</button>
+        </form>
+        <br>
+        <form action="listaPD.php" method="GET">
+            <label for="numero">Numero da pergunta:</label>
+            <input type="text" name="numero">
+            <button type="submit" name="opcao" value="uma">Listar uma pergunta discursiva</button>
         </form>
     </body>
 </html>
