@@ -6,33 +6,44 @@ if (!adm()) {
     exit;
 }
 
-$users = carregarUsers();
 $msg = '';
 
 if ($_POST) {
     if ($_POST['acao'] == 'add') {
-        $novo = [
-            'id' => count($users) + 1,
-            'user' => $_POST['user'],
-            'pass' => $_POST['pass'],
-            'nome' => $_POST['nome'],
-            'tipo' => $_POST['tipo']
-        ];
-        $users[] = $novo;
-        file_put_contents('users.json', json_encode($users));
-        $msg = 'Adicionado';
+        $user = trim($_POST['user']);
+        $pass = trim($_POST['pass']);
+        $nome = trim($_POST['nome']);
+        $tipo = $_POST['tipo'];
+        
+        $stmt = $conn->prepare("INSERT INTO users (user, pass, nome, tipo) VALUES (?, ?, ?, ?)");
+        $stmt->bind_param("ssss", $user, $pass, $nome, $tipo);
+        
+        if ($stmt->execute()) {
+            $msg = 'Usuário adicionado!';
+        } else {
+            $msg = 'Erro ao adicionar!';
+        }
+        $stmt->close();
     }
     
     if ($_POST['acao'] == 'del') {
-        $id = $_POST['id'];
-        $users = array_filter($users, function($u) use ($id) {
-            return $u['id'] != $id;
-        });
-        file_put_contents('users.json', json_encode(array_values($users)));
-        $msg = 'Removido';
+        $id = (int)$_POST['id'];
+        $stmt = $conn->prepare("DELETE FROM users WHERE id = ?");
+        $stmt->bind_param("i", $id);
+        
+        if ($stmt->execute()) {
+            $msg = 'Usuário removido!';
+        } else {
+            $msg = 'Erro ao remover!';
+        }
+        $stmt->close();
     }
-    
-    $users = carregarUsers();
+}
+
+$result = $conn->query("SELECT * FROM users ORDER BY id");
+$users = [];
+while ($row = $result->fetch_assoc()) {
+    $users[] = $row;
 }
 ?>
 <!DOCTYPE html>
