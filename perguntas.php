@@ -6,40 +6,84 @@ if (!adm()) {
     exit;
 }
 
-$arquivo = 'perguntas.json';
-if (!file_exists($arquivo)) {
-    file_put_contents($arquivo, json_encode([]));
-}
-
-$perguntas = json_decode(file_get_contents($arquivo), true);
 $msg = '';
 
 if ($_POST) {
     if ($_POST['acao'] == 'add') {
-        $nova = [
-            'id' => count($perguntas) + 1,
-            'numero' => $_POST['numero'],
-            'pergunta' => $_POST['pergunta'],
-            'tipo' => $_POST['tipo'],
-            'opcoes' => $_POST['opcoes'] ?? [],
-            'resp' => $_POST['resp'] ?? '',
-            'gab' => $_POST['gab'] ?? ''
-        ];
-        $perguntas[] = $nova;
-        file_put_contents($arquivo, json_encode($perguntas));
-        $msg = 'Adicionada';
+        $numero = trim($_POST['numero']);
+        $pergunta_texto = trim($_POST['pergunta']);
+        $tipo = $_POST['tipo'];
+        
+        if (empty($numero) || empty($pergunta_texto)) {
+            $msg = 'Número e pergunta são obrigatórios!';
+        } else {
+            if ($tipo == 'multipla') {
+                $opcoes_raw = $_POST['opcoes'] ?? [];
+                $opcoes = [];
+                foreach ($opcoes_raw as $opcao) {
+                    $opcao_limpa = trim($opcao);
+                    if (!empty($opcao_limpa)) {
+                        $opcoes[] = $opcao_limpa;
+                    }
+                }
+                
+                $gab = $_POST['gab'] ?? '';
+                if (count($opcoes) < 2) {
+                    $msg = 'Múltipla escolha precisa de pelo menos 2 opções!';
+                } elseif (empty($gab) || $gab < 1 || $gab > count($opcoes)) {
+                    $msg = 'Gabarito inválido!';
+                } else {
+                    $opcoes_json = json_encode($opcoes);
+                    $stmt = $conn->prepare("INSERT INTO perguntas (numero, pergunta, tipo, opcoes, gab) VALUES (?, ?, ?, ?, ?)");
+                    $stmt->bind_param("sssss", $numero, $pergunta_texto, $tipo, $opcoes_json, $gab);
+                    
+                    if ($stmt->execute()) {
+                        $msg = 'Pergunta de múltipla escolha adicionada!';
+                    } else {
+                        $msg = 'Erro ao salvar!';
+                    }
+                    $stmt->close();
+                }
+            } else {
+                $resp = trim($_POST['resp'] ?? '');
+                if (empty($resp)) {
+                    $msg = 'Resposta é obrigatória!';
+                } else {
+                    $stmt = $conn->prepare("INSERT INTO perguntas (numero, pergunta, tipo, resp) VALUES (?, ?, ?, ?)");
+                    $stmt->bind_param("ssss", $numero, $pergunta_texto, $tipo, $resp);
+                    
+                    if ($stmt->execute()) {
+                        $msg = 'Pergunta discursiva adicionada!';
+                    } else {
+                        $msg = 'Erro ao salvar!';
+                    }
+                    $stmt->close();
+                }
+            }
+        }
     }
     
     if ($_POST['acao'] == 'del') {
-        $id = $_POST['id'];
-        $perguntas = array_filter($perguntas, function($p) use ($id) {
-            return $p['id'] != $id;
-        });
-        file_put_contents($arquivo, json_encode(array_values($perguntas)));
-        $msg = 'Removida';
+        $id = (int)$_POST['id'];
+        $stmt = $conn->prepare("DELETE FROM perguntas WHERE id = ?");
+        $stmt->bind_param("i", $id);
+        
+        if ($stmt->execute()) {
+            $msg = 'Pergunta removida!';
+        } else {
+            $msg = 'Erro ao remover!';
+        }
+        $stmt->close();
     }
-    
-    $perguntas = json_decode(file_get_contents($arquivo), true);
+}
+
+$result = $conn->query("SELECT * FROM perguntas ORDER BY id DESC");
+$perguntas = [];
+while ($row = $result->fetch_assoc()) {
+    if ($row['opcoes']) {
+        $row['opcoes'] = json_decode($row['opcoes'], true);
+    }
+    $perguntas[] = $row;
 }
 ?>
 <!DOCTYPE html>
@@ -60,11 +104,11 @@ if ($_POST) {
     <h1>Perguntas</h1>
 
     <?php if ($msg): ?>
-        <div class="msg success"><?= $msg ?></div>
+        <div class="msg <?= strpos($msg, 'Erro') !== false ? 'error' : 'success' ?>"><?= $msg ?></div>
     <?php endif; ?>
 
-    <h2>Nova</h2>
-    <form method="POST">
+    <h2>Nova Pergunta</h2>
+    <form method="POST" id="formPergunta">
         <input type="hidden" name="acao" value="add">
         <div class="form-group">
             <label>Número:</label><br>
@@ -76,55 +120,63 @@ if ($_POST) {
         </div>
         <div class="form-group">
             <label>Tipo:</label><br>
-            <select name="tipo" onchange="mudarTipo()">
-                <option value="multipla">Múltipla</option>
+            <select name="tipo" id="tipo" onchange="mudarTipo()" required>
+                <option value="multipla">Múltipla Escolha</option>
                 <option value="discursiva">Discursiva</option>
             </select>
         </div>
         
         <div id="multipla">
+            <h3>Opções de Resposta:</h3>
             <?php for ($i = 1; $i <= 5; $i++): ?>
             <div class="form-group">
                 <label>Opção <?= $i ?>:</label><br>
-                <input type="text" name="opcoes[]">
+                <input type="text" name="opcoes[]" class="opcao-input" placeholder="Digite a opção <?= $i ?>">
             </div>
             <?php endfor; ?>
             <div class="form-group">
                 <label>Gabarito:</label><br>
-                <input type="number" name="gab" min="1" max="5">
+                <select name="gab" id="gab-select" required>
+                    <option value="">Selecione a opção correta</option>
+                    <?php for ($i = 1; $i <= 5; $i++): ?>
+                        <option value="<?= $i ?>">Opção <?= $i ?></option>
+                    <?php endfor; ?>
+                </select>
             </div>
         </div>
         
         <div id="discursiva" style="display:none;">
             <div class="form-group">
-                <label>Resposta:</label><br>
-                <textarea name="resp"></textarea>
+                <label>Resposta Esperada:</label><br>
+                <textarea name="resp" class="resp-input"></textarea>
             </div>
         </div>
         
-        <button type="submit">Add</button>
+        <button type="submit">Adicionar Pergunta</button>
     </form>
 
-    <h2>Lista</h2>
+    <h2>Lista de Perguntas (<?= count($perguntas) ?>)</h2>
     <table>
         <tr>
             <th>ID</th>
             <th>Número</th>
             <th>Pergunta</th>
             <th>Tipo</th>
+            <th>Data</th>
             <th>Ação</th>
         </tr>
         <?php foreach ($perguntas as $p): ?>
         <tr>
             <td><?= $p['id'] ?></td>
-            <td><?= $p['numero'] ?></td>
-            <td><?= substr($p['pergunta'], 0, 30) ?>...</td>
-            <td><?= $p['tipo'] ?></td>
+            <td><?= htmlspecialchars($p['numero']) ?></td>
+            <td><?= htmlspecialchars(substr($p['pergunta'], 0, 50)) ?>...</td>
+            <td><?= $p['tipo'] == 'multipla' ? 'Múltipla' : 'Discursiva' ?></td>
+            <td><?= date('d/m/Y', strtotime($p['data_criacao'])) ?></td>
             <td>
                 <form method="POST" style="display:inline;">
                     <input type="hidden" name="acao" value="del">
                     <input type="hidden" name="id" value="<?= $p['id'] ?>">
-                    <button type="submit" onclick="return confirm('Del?')">Del</button>
+                    <button type="submit" onclick="return confirm('Excluir esta pergunta?')">Excluir</button>
                 </form>
             </td>
         </tr>
@@ -133,10 +185,32 @@ if ($_POST) {
 
     <script>
     function mudarTipo() {
-        var tipo = document.querySelector('[name="tipo"]').value;
-        document.getElementById('multipla').style.display = tipo == 'multipla' ? 'block' : 'none';
-        document.getElementById('discursiva').style.display = tipo == 'discursiva' ? 'block' : 'none';
+        var tipo = document.getElementById('tipo').value;
+        var multipla = document.getElementById('multipla');
+        var discursiva = document.getElementById('discursiva');
+        
+        if (tipo === 'multipla') {
+            multipla.style.display = 'block';
+            discursiva.style.display = 'none';
+            document.querySelectorAll('.opcao-input').forEach(function(input) {
+                input.required = true;
+            });
+            document.getElementById('gab-select').required = true;
+            document.querySelector('.resp-input').required = false;
+        } else {
+            multipla.style.display = 'none';
+            discursiva.style.display = 'block';
+            document.querySelectorAll('.opcao-input').forEach(function(input) {
+                input.required = false;
+            });
+            document.getElementById('gab-select').required = false;
+            document.querySelector('.resp-input').required = true;
+        }
     }
+    
+    document.addEventListener('DOMContentLoaded', function() {
+        mudarTipo();
+    });
     </script>
 </body>
 </html>
