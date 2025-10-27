@@ -1,2 +1,0 @@
-numero;pergunta;resp
-1;5+5;10
