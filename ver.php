@@ -1,8 +1,14 @@
 <?php
 require 'auth.php';
 
-$arquivo = 'perguntas.json';
-$perguntas = file_exists($arquivo) ? json_decode(file_get_contents($arquivo), true) : [];
+$result = $conn->query("SELECT * FROM perguntas ORDER BY numero");
+$perguntas = [];
+while ($row = $result->fetch_assoc()) {
+    if ($row['opcoes']) {
+        $row['opcoes'] = json_decode($row['opcoes'], true);
+    }
+    $perguntas[] = $row;
+}
 ?>
 <!DOCTYPE html>
 <html>
